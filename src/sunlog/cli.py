@@ -227,5 +227,21 @@ def summary(weeks: int) -> None:
 
 
 
+
+# Delete command
+import sys
+from sunlog.storage import delete_entry
+
+
+@cli.command()
+@click.argument("entry_id", type=int)
+def delete(entry_id: int) -> None:
+    if delete_entry(entry_id):
+        click.echo(f"Entry {entry_id} deleted.")
+    else:
+        click.echo(f"No entry with ID {entry_id}.", err=True)
+        sys.exit(1)
+
+
 if __name__ == "__main__":
     cli()
