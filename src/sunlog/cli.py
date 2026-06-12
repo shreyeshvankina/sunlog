@@ -98,7 +98,7 @@ def log(
 
 
 
-
+# history command
 from datetime import timedelta
 from sunlog.storage import load_entries
 
@@ -157,6 +157,74 @@ def history(days: int, show_all: bool) -> None:
     total_iu = sum(e.get("estimated_iu", 0) for e in filtered)
     click.echo(f"{'-'*60}")
     click.echo(f"  Total estimated vitamin D: {_fmt_iu(total_iu)}\n")
+
+
+
+
+
+# summary command
+RECOMMENDED_DAILY_IU = 1000
+
+
+def _bar(value: float, maximum: float, width: int = 20) -> str:
+    filled = int(round(width * min(value, maximum) / maximum)) if maximum else 0
+    return "#" * filled + "-" * (width - filled)
+
+
+@cli.command()
+@click.option("--weeks", "-w", default=1, show_default=True,
+              help="Number of weeks to summarize.")
+def summary(weeks: int) -> None:
+    """Show a weekly vitamin D summary with daily progress bars."""
+    entries = load_entries()
+    if not entries:
+        click.echo("No sessions logged yet. Use `sunlog log` to add one.")
+        return
+
+    today = date.today()
+    start = today - timedelta(weeks=weeks - 1, days=today.weekday())
+    end = start + timedelta(weeks=weeks) - timedelta(days=1)
+
+    click.echo(f"\n{'-'*52}")
+    click.echo(f"  Weekly summary  ({start} -> {end})")
+    click.echo(f"  Daily target: {_fmt_iu(RECOMMENDED_DAILY_IU)}")
+    click.echo(f"{'-'*52}")
+
+    total_iu = 0.0
+    days_with_sun = 0
+    streak = 0
+    current_streak = 0
+
+    for offset in range((end - start).days + 1):
+        day = start + timedelta(days=offset)
+        day_entries = _entries_for_range(entries, day, day)
+        day_iu = sum(e.get("estimated_iu", 0) for e in day_entries)
+        total_iu += day_iu
+        had_sun = day_iu > 0
+
+        if had_sun:
+            days_with_sun += 1
+            current_streak += 1
+            streak = max(streak, current_streak)
+        else:
+            current_streak = 0
+
+        bar = _bar(day_iu, RECOMMENDED_DAILY_IU)
+        marker = "OK " if day_iu >= RECOMMENDED_DAILY_IU else (".  " if had_sun else "   ")
+        is_today = " <- today" if day == today else ""
+        click.echo(
+            f"  {marker}{day.strftime('%a %b %d')}  {bar}  {_fmt_iu(day_iu)}{is_today}"
+        )
+
+    avg_iu = total_iu / ((end - start).days + 1)
+    click.echo(f"{'-'*52}")
+    click.echo(f"  Total IU      : {_fmt_iu(total_iu)}")
+    click.echo(f"  Daily average : {_fmt_iu(avg_iu)}")
+    click.echo(f"  Days with sun : {days_with_sun} / {(end - start).days + 1}")
+    click.echo(f"  Longest streak: {streak} day(s)\n")
+
+
+
 
 
 if __name__ == "__main__":
